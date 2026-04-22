@@ -756,9 +756,11 @@ function syncCaptainCodeFromName() {
   const displayedName = rawName
     ? rawName.toLowerCase().replace(/\b([a-z])/g, (m) => m.toUpperCase())
     : "";
-  elements.captainCodeHint.textContent = code
-    ? `Displayed as: ${displayedName || code} | Captain code: ${code}`
-    : "Your name will be shown with a capital first letter. The code is your name in lowercase.";
+  if (code) {
+    elements.captainCodeHint.innerHTML = `Displayed as: <strong style="color:var(--text)">${displayedName}</strong> &nbsp;|&nbsp; Your login code: <strong style="color:var(--accent)">${code}</strong><br><small style="color:var(--muted)">Use this exact name every time you rejoin.</small>`;
+  } else {
+    elements.captainCodeHint.textContent = "Your name will be shown with a capital first letter. The code is your name in lowercase.";
+  }
 }
 
 function updateRoleFields() {

@@ -529,7 +529,7 @@ async function joinCaptain(sessionKey, displayName, teamName, captainCodeInput) 
     if (!teamRows.length && !canRegisterNewTeam) {
       return {
         ok: false,
-        error: "New captains can only join before bidding starts.",
+        error: `Bidding has already started. Only captains who registered before bidding can rejoin — use the exact same name you used when you first joined.`,
       };
     }
 
