@@ -51,6 +51,7 @@ const elements = {
   displayName: document.getElementById("displayName"),
   captainFields: document.getElementById("captainFields"),
   captainCode: document.getElementById("captainCode"),
+  captainCodeVisible: document.getElementById("captainCodeVisible"),
   captainCodeHint: document.getElementById("captainCodeHint"),
   teamName: document.getElementById("teamName"),
   adminFields: document.getElementById("adminFields"),
@@ -84,7 +85,9 @@ const elements = {
   endAuctionButton: document.getElementById("endAuctionButton"),
   restartCurrentButton: document.getElementById("restartCurrentButton"),
   restartWholeButton: document.getElementById("restartWholeButton"),
+  nukeSessionButton: document.getElementById("nukeSessionButton"),
   unsoldList: document.getElementById("unsoldList"),
+  soldRosterList: document.getElementById("soldRosterList"),
   bidPanel: document.getElementById("bidPanel"),
   bidContext: document.getElementById("bidContext"),
   bidForm: document.getElementById("bidForm"),
@@ -577,6 +580,39 @@ function renderUnsoldList() {
     .join("");
 }
 
+function renderSoldRosterList() {
+  if (!isAdmin() || !elements.soldRosterList) return;
+
+  const allSold = (state.auction.teams ?? []).flatMap((team) =>
+    (team.roster ?? []).map((player) => ({ ...player, teamName: team.name, teamAccent: team.accent })),
+  );
+
+  if (!allSold.length) {
+    elements.soldRosterList.innerHTML = '<p class="empty-state">No sold players yet.</p>';
+    return;
+  }
+
+  elements.soldRosterList.innerHTML = allSold
+    .map((player) => `
+      <div class="unsold-item">
+        <div class="unsold-head">
+          <div>
+            <h3>${player.name}</h3>
+            <p class="team-meta" style="border-left:3px solid ${player.teamAccent};padding-left:6px">${player.teamName} — ${formatAmount(player.soldPrice)}</p>
+          </div>
+          <button
+            type="button"
+            class="secondary-button return-player-button"
+            data-result-id="${player.id}"
+          >
+            Return &amp; Refund
+          </button>
+        </div>
+      </div>
+    `)
+    .join("");
+}
+
 function renderPlayerCount() {
   const players = state.auction.configuredPlayers ?? [];
   elements.playerCountNote.textContent = `${players.length} / ${state.auction.maxPlayers} players loaded`;
@@ -655,6 +691,7 @@ function renderAdminPanel() {
 
   renderPlayerCount();
   renderUnsoldList();
+  renderSoldRosterList();
 }
 
 function renderFixtures() {
@@ -747,17 +784,31 @@ async function loadAppConfig() {
 function syncCaptainCodeFromName() {
   if (elements.roleSelect.value !== "captain") {
     elements.captainCode.value = "";
+    if (elements.captainCodeVisible) elements.captainCodeVisible.value = "";
     return;
   }
 
-  const code = normalizeCaptainCode(elements.displayName.value);
+  // Prefer the explicit captainCodeVisible field if the user typed in it directly
+  const visibleVal = elements.captainCodeVisible ? elements.captainCodeVisible.value.trim() : "";
+  const nameVal = elements.displayName.value.trim();
+
+  // Auto-fill captainCodeVisible from displayName if it's empty
+  if (!visibleVal && nameVal) {
+    const autoCode = normalizeCaptainCode(nameVal);
+    if (elements.captainCodeVisible) elements.captainCodeVisible.value = autoCode;
+  }
+
+  const code = normalizeCaptainCode(
+    visibleVal || nameVal,
+  );
   elements.captainCode.value = code;
-  const rawName = elements.displayName.value.trim();
-  const displayedName = rawName
-    ? rawName.toLowerCase().replace(/\b([a-z])/g, (m) => m.toUpperCase())
+
+  const displayedName = nameVal
+    ? nameVal.toLowerCase().replace(/\b([a-z])/g, (m) => m.toUpperCase())
     : "";
+
   if (code) {
-    elements.captainCodeHint.innerHTML = `Displayed as: <strong style="color:var(--text)">${displayedName}</strong> &nbsp;|&nbsp; Your login code: <strong style="color:var(--accent)">${code}</strong><br><small style="color:var(--muted)">Use this exact name every time you rejoin.</small>`;
+    elements.captainCodeHint.innerHTML = `Displayed as: <strong style="color:var(--text)">${displayedName || code}</strong> &nbsp;|&nbsp; Login code: <strong style="color:var(--accent)">${code}</strong><br><small style="color:var(--muted)">Use this exact code every time you rejoin.</small>`;
   } else {
     elements.captainCodeHint.textContent = "Your name will be shown with a capital first letter. The code is your name in lowercase.";
   }
@@ -774,9 +825,10 @@ function updateRoleFields() {
   elements.adminUsername.required = isAdminRole;
   elements.adminPassword.required = isAdminRole;
   elements.displayName.required = isCaptainRole;
+  if (elements.captainCodeVisible) elements.captainCodeVisible.required = isCaptainRole;
 
   if (isCaptainRole) {
-    elements.displayNameLabel.textContent = "Captain name";
+    elements.displayNameLabel.textContent = "Captain name (display)";
     elements.displayName.placeholder = "Enter captain name";
   } else if (isAdminRole) {
     elements.displayNameLabel.textContent = "Display name";
@@ -815,6 +867,9 @@ function joinSession(payload, announce = true) {
 
 elements.roleSelect.addEventListener("change", updateRoleFields);
 elements.displayName.addEventListener("input", syncCaptainCodeFromName);
+if (elements.captainCodeVisible) {
+  elements.captainCodeVisible.addEventListener("input", syncCaptainCodeFromName);
+}
 
 [elements.auctionTabButton, elements.historyTabButton].forEach((button) => {
   button.addEventListener("click", () => {
@@ -831,11 +886,12 @@ elements.loginForm.addEventListener("submit", (event) => {
   }
 
   const role = elements.roleSelect.value;
+  const visibleCode = elements.captainCodeVisible ? elements.captainCodeVisible.value.trim() : "";
   const payload = {
     sessionId: state.defaultSessionId,
     role,
     displayName: elements.displayName.value.trim(),
-    captainCode: elements.captainCode.value.trim(),
+    captainCode: visibleCode || elements.captainCode.value.trim(),
     teamName: elements.teamName.value.trim(),
     adminUsername: elements.adminUsername.value.trim(),
     adminPassword: elements.adminPassword.value,
@@ -964,6 +1020,40 @@ elements.restartWholeButton.addEventListener("click", () => {
   });
 });
 
+elements.nukeSessionButton.addEventListener("click", () => {
+  if (!confirm("⚠ This will wipe EVERYTHING — all teams, players, bids, and rosters. All captains will be kicked back to the login screen. Are you absolutely sure?")) {
+    return;
+  }
+
+  socket.emit("admin:session:nuke", {}, (response) => {
+    if (!response?.ok) {
+      setFlash(response?.error || "Could not reset the session.", "error", "app");
+      return;
+    }
+
+    applyAuctionState(response.state);
+    setFlash("Session fully reset. Captains must rejoin from scratch.", "info", "app");
+  });
+});
+
+document.addEventListener("click", (event) => {
+  const button = event.target.closest(".return-player-button[data-result-id]");
+  if (!button) return;
+
+  const playerName = button.closest(".unsold-item")?.querySelector("h3")?.textContent || "this player";
+  if (!confirm(`Return ${playerName} to the bidding pool and refund the team?`)) return;
+
+  socket.emit("admin:player:return", { resultId: button.dataset.resultId }, (response) => {
+    if (!response?.ok) {
+      setFlash(response?.error || "Could not return the player.", "error", "app");
+      return;
+    }
+
+    applyAuctionState(response.state);
+    setFlash(`${playerName} returned to the pool and money refunded.`, "success", "app");
+  });
+});
+
 elements.unsoldList.addEventListener("click", (event) => {
   const button = event.target.closest("[data-result-id]");
 
@@ -1007,6 +1097,16 @@ elements.matchForm.addEventListener("submit", (event) => {
       setFlash("Match record saved.", "success", "app");
     },
   );
+});
+
+socket.on("session:reset", () => {
+  // Admin nuked the session — kick back to login
+  state.joined = false;
+  state.participant = { role: null, displayName: "", team: null };
+  state.lastJoinPayload = null;
+  elements.dashboardScreen.classList.add("hidden");
+  elements.loginScreen.classList.remove("hidden");
+  setFlash("The administrator has reset the entire session. Please rejoin.", "info", "login");
 });
 
 socket.on("connect", () => {

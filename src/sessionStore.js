@@ -1205,6 +1205,113 @@ async function restartWholeAuction(sessionKey) {
   });
 }
 
+async function nukeSession(sessionKey) {
+  const session = await getSessionRow(sessionKey);
+
+  return withTransaction(async (connection) => {
+    const [sessionRows] = await connection.execute(
+      `SELECT id FROM auction_sessions WHERE id = ? LIMIT 1 FOR UPDATE`,
+      [session.id],
+    );
+
+    if (!sessionRows.length) {
+      return { ok: false, error: "Session not found." };
+    }
+
+    // Wipe everything — bids, lots, players, matchups, teams
+    await connection.execute(`DELETE FROM bids WHERE session_id = ?`, [session.id]);
+    await connection.execute(`DELETE FROM auction_lots WHERE session_id = ?`, [session.id]);
+    await connection.execute(`DELETE FROM players WHERE session_id = ?`, [session.id]);
+    await clearSessionMatchups(connection, session.id);
+    await connection.execute(`DELETE FROM teams WHERE session_id = ?`, [session.id]);
+
+    await connection.execute(
+      `UPDATE auction_sessions
+       SET status = 'setup',
+           current_lot_id = NULL,
+           current_bid = NULL,
+           current_highest_team_id = NULL,
+           current_highest_captain_name = NULL,
+           auction_end_time = NULL,
+           paused_remaining_ms = NULL
+       WHERE id = ?`,
+      [session.id],
+    );
+
+    return { ok: true };
+  });
+}
+
+async function adminReturnPlayerToPool(sessionKey, resultId) {
+  const session = await getSessionRow(sessionKey);
+
+  return withTransaction(async (connection) => {
+    const [sessionRows] = await connection.execute(
+      `SELECT * FROM auction_sessions WHERE id = ? LIMIT 1 FOR UPDATE`,
+      [session.id],
+    );
+    const lockedSession = sessionRows[0];
+
+    // Cannot remove the currently live lot
+    if (lockedSession.current_lot_id && String(lockedSession.current_lot_id) === String(resultId)) {
+      return { ok: false, error: "End the current bid before returning this player to the pool." };
+    }
+
+    const [lotRows] = await connection.execute(
+      `SELECT l.id, l.player_id, l.status, l.final_price, l.winning_team_id, l.source_lot_id
+       FROM auction_lots l
+       WHERE l.id = ? AND l.session_id = ? AND l.status IN ('sold', 'unsold')
+       LIMIT 1 FOR UPDATE`,
+      [resultId, session.id],
+    );
+
+    if (!lotRows.length) {
+      return { ok: false, error: "Player result not found or not eligible to return." };
+    }
+
+    const lot = lotRows[0];
+
+    // Credit money back to the winning team if sold
+    if (lot.status === "sold" && lot.winning_team_id && lot.final_price) {
+      await connection.execute(
+        `UPDATE teams SET remaining_budget = remaining_budget + ? WHERE id = ?`,
+        [lot.final_price, lot.winning_team_id],
+      );
+    }
+
+    // Get the next lot number
+    const [lotNumberRows] = await connection.execute(
+      `SELECT COALESCE(MAX(lot_number), 0) AS max_lot FROM auction_lots WHERE session_id = ?`,
+      [session.id],
+    );
+    const nextLotNumber = Number(lotNumberRows[0]?.max_lot ?? 0) + 1;
+
+    // Re-queue the player as a fresh lot
+    await connection.execute(
+      `INSERT INTO auction_lots (session_id, player_id, source_lot_id, lot_number, rebid_round, base_price, status)
+       VALUES (?, ?, ?, ?, 0, ?, 'queued')`,
+      [session.id, lot.player_id, lot.id, nextLotNumber, lockedSession.base_price],
+    );
+
+    // Mark the old lot as returned (unsold + queued_for_rebid flag)
+    await connection.execute(
+      `UPDATE auction_lots SET status = 'unsold', queued_for_rebid = 1 WHERE id = ?`,
+      [lot.id],
+    );
+
+    // If session was complete, reopen it
+    if (lockedSession.status === "complete") {
+      await connection.execute(
+        `UPDATE auction_sessions SET status = 'waiting' WHERE id = ?`,
+        [session.id],
+      );
+      await clearSessionMatchups(connection, session.id);
+    }
+
+    return { ok: true };
+  });
+}
+
 async function queueUnsoldPlayerForRebid(sessionKey, resultId) {
   const session = await getSessionRow(sessionKey);
 
@@ -1292,10 +1399,12 @@ async function queueUnsoldPlayerForRebid(sessionKey, resultId) {
 
 module.exports = {
   ADMIN_ACCOUNT,
+  adminReturnPlayerToPool,
   getCaptainTeamByCode,
   getSessionState,
   joinCaptain,
   listRunningAuctions,
+  nukeSession,
   pauseAuction,
   placeBid,
   queueUnsoldPlayerForRebid,

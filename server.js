@@ -10,6 +10,7 @@ const {
   getSessionState,
   joinCaptain,
   listRunningAuctions,
+  nukeSession,
   pauseAuction,
   placeBid,
   queueUnsoldPlayerForRebid,
@@ -20,6 +21,7 @@ const {
   settleAuction,
   startAuction,
   verifyAdminCredentials,
+  adminReturnPlayerToPool,
 } = require("./src/sessionStore");
 const { addMatchRecord, getMatchHistory } = require("./src/matchHistoryStore");
 
@@ -762,6 +764,67 @@ io.on("connection", (socket) => {
         ok: true,
         state: maskStateForViewer(state, runtimeViewer),
       });
+    } catch (error) {
+      respondError(ack, error);
+    }
+  });
+
+  socket.on("admin:session:nuke", async (_payload = {}, ack = () => {}) => {
+    try {
+      const sessionId = socket.data.sessionId;
+      const runtimeViewer = getRuntimeSession(sessionId).viewers.get(socket.id);
+
+      if (!sessionId || runtimeViewer?.role !== "admin") {
+        ack({ ok: false, error: "Only the administrator can use that action." });
+        return;
+      }
+
+      clearRuntimeTimer(sessionId);
+      const result = await nukeSession(sessionId);
+
+      if (!result.ok) {
+        ack(result);
+        return;
+      }
+
+      // Kick all non-admin viewers back to login
+      const runtimeSession = getRuntimeSession(sessionId);
+      for (const [socketId, viewer] of runtimeSession.viewers.entries()) {
+        if (viewer.role !== "admin") {
+          const targetSocket = io.sockets.sockets.get(socketId);
+          if (targetSocket) {
+            targetSocket.emit("session:reset");
+            detachSocket(targetSocket);
+          }
+        }
+      }
+
+      const state = await emitStateToRoom(sessionId, "auction:state");
+      ack({ ok: true, state: maskStateForViewer(state, runtimeViewer) });
+    } catch (error) {
+      respondError(ack, error);
+    }
+  });
+
+  socket.on("admin:player:return", async (payload = {}, ack = () => {}) => {
+    try {
+      const sessionId = socket.data.sessionId;
+      const runtimeViewer = getRuntimeSession(sessionId).viewers.get(socket.id);
+
+      if (!sessionId || runtimeViewer?.role !== "admin") {
+        ack({ ok: false, error: "Only the administrator can use that action." });
+        return;
+      }
+
+      const result = await adminReturnPlayerToPool(sessionId, payload.resultId);
+
+      if (!result.ok) {
+        ack(result);
+        return;
+      }
+
+      const state = await emitStateToRoom(sessionId);
+      ack({ ok: true, state: maskStateForViewer(state, runtimeViewer) });
     } catch (error) {
       respondError(ack, error);
     }

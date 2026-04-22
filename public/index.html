@@ -62,6 +62,18 @@
               <div id="captainFields" class="role-fields hidden">
                 <input id="captainCode" name="captainCode" type="hidden" />
 
+                <label>
+                  Captain code <span class="field-hint">(your name in lowercase — use this every time)</span>
+                  <input
+                    id="captainCodeVisible"
+                    name="captainCodeVisible"
+                    type="text"
+                    maxlength="64"
+                    placeholder="e.g. ayaan"
+                    autocomplete="off"
+                  />
+                </label>
+
                 <p class="panel-note" id="captainCodeHint">
                   Your name will be displayed with a capital first letter. The captain code is your name in all lowercase (e.g. Ayaan &rarr; displayed as <strong>Ayaan</strong>, code is <strong>ayaan</strong>).
                 </p>
@@ -221,6 +233,9 @@
                     <button type="button" class="secondary-button" id="restartWholeButton">
                       Restart Whole Auction
                     </button>
+                    <button type="button" class="danger-button" id="nukeSessionButton">
+                      ⚠ Reset Entire Session
+                    </button>
                   </div>
                 </article>
 
@@ -230,6 +245,14 @@
                     If someone goes unsold, queue that player again here and reopen bidding later.
                   </p>
                   <div id="unsoldList" class="unsold-list"></div>
+                </article>
+
+                <article class="admin-card">
+                  <h3>Return Sold Player to Pool</h3>
+                  <p class="panel-note">
+                    Remove a player from a team's roster, credit the money back, and re-queue them for bidding.
+                  </p>
+                  <div id="soldRosterList" class="unsold-list"></div>
                 </article>
               </div>
             </section>
@@ -371,6 +394,8 @@
         </section>
       </section>
     </div>
+
+    <div class="creator-sig">Made by Ayaan Ali</div>
 
     <script src="/socket.io/socket.io.js"></script>
     <script src="/app.js"></script>
