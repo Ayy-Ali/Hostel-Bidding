@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Hostel Football Auction</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <section class="screen login-screen" id="loginScreen">
+        <div class="login-grid">
+          <section class="brand-panel">
+            <h1>Hostel Football Auction</h1>
+            <p class="subheading">
+              Login first. After you enter as administrator, captain, player, or spectator,
+              the app moves you into the live auction room.
+            </p>
+
+            <div class="status-strip">
+              <span class="status-chip">Base Price 2L</span>
+              <span class="status-chip">Budget 2Cr</span>
+              <span class="status-chip">Increment 1L</span>
+              <span class="status-chip">Timer 60 seconds</span>
+            </div>
+          </section>
+
+          <section class="panel auth-panel">
+            <div class="panel-heading">
+              <div>
+                <p class="panel-label">Login</p>
+                <h2>Enter the auction room</h2>
+              </div>
+              <p class="panel-note">
+                Captains join with their name and team name. The captain code is generated from
+                the name in lowercase.
+              </p>
+            </div>
+
+            <form id="loginForm" class="auth-form">
+              <label>
+                Join as
+                <select id="roleSelect" name="role">
+                  <option value="spectator">Spectator</option>
+                  <option value="player">Player</option>
+                  <option value="captain">Captain</option>
+                  <option value="admin">Administrator</option>
+                </select>
+              </label>
+
+              <label>
+                <span id="displayNameLabel">Display name</span>
+                <input
+                  id="displayName"
+                  name="displayName"
+                  type="text"
+                  maxlength="40"
+                  placeholder="Optional for spectators and players"
+                />
+              </label>
+
+              <div id="captainFields" class="role-fields hidden">
+                <input id="captainCode" name="captainCode" type="hidden" />
+
+                <p class="panel-note" id="captainCodeHint">
+                  Your name will be displayed with a capital first letter. The captain code is your name in all lowercase (e.g. Ayaan &rarr; displayed as <strong>Ayaan</strong>, code is <strong>ayaan</strong>).
+                </p>
+
+                <label>
+                  Team name
+                  <input
+                    id="teamName"
+                    name="teamName"
+                    type="text"
+                    maxlength="28"
+                    placeholder="Enter your team name"
+                  />
+                </label>
+              </div>
+
+              <div id="adminFields" class="role-fields hidden">
+                <label>
+                  Administrator username
+                  <input id="adminUsername" name="adminUsername" type="text" placeholder="admin" />
+                </label>
+
+                <label>
+                  Administrator password
+                  <input
+                    id="adminPassword"
+                    name="adminPassword"
+                    type="password"
+                    placeholder="Administrator password"
+                  />
+                </label>
+              </div>
+
+              <button type="submit" class="primary-button">Continue to Auction</button>
+            </form>
+
+            <p id="loginFlash" class="flash-message" aria-live="polite"></p>
+          </section>
+        </div>
+      </section>
+
+      <section class="screen dashboard-screen hidden" id="dashboardScreen">
+        <header class="hero">
+          <div class="hero-copy">
+            <p class="eyebrow">Live Auction Room</p>
+            <h1>Hostel Football Auction</h1>
+            <p class="subheading" id="heroNote">
+              Track the current player, highest bid, teams, and match pairings in real time.
+            </p>
+          </div>
+
+          <div class="hero-status">
+            <span class="live-pill" id="livePill">LIVE</span>
+            <span class="status-chip" id="viewerCount">0 live viewers</span>
+            <span class="status-chip" id="participantBadge">Role spectator</span>
+            <button type="button" class="secondary-button" id="leaveButton">Back to Login</button>
+          </div>
+        </header>
+
+        <div class="section-tabs">
+          <button type="button" class="tab-button active" id="auctionTabButton" data-section="auction">
+            Auction
+          </button>
+          <button type="button" class="tab-button" id="historyTabButton" data-section="history">
+            Matches
+          </button>
+        </div>
+
+        <p id="appFlash" class="flash-message" aria-live="polite"></p>
+
+        <section class="section-view" id="auctionSection">
+          <main class="dashboard">
+            <section class="panel spotlight-panel">
+              <div class="panel-heading">
+                <div>
+                  <p class="panel-label">Current Bid</p>
+                  <h2 id="currentPlayerName">Waiting for administrator setup</h2>
+                </div>
+
+                <div class="countdown-wrap">
+                  <span class="countdown-label">Time left</span>
+                  <span class="countdown-value" id="countdown">00:00</span>
+                </div>
+              </div>
+
+              <div class="spotlight-grid">
+                <article class="stat-card">
+                  <span class="stat-label">Lot status</span>
+                  <strong class="stat-value" id="currentPlayerMeta">Waiting for first player</strong>
+                </article>
+
+                <article class="stat-card">
+                  <span class="stat-label">Base price</span>
+                  <strong class="stat-value" id="basePrice">--</strong>
+                </article>
+
+                <article class="stat-card hot-card">
+                  <span class="stat-label">Highest bid</span>
+                  <strong class="stat-value" id="currentBid">--</strong>
+                </article>
+
+                <article class="stat-card">
+                  <span class="stat-label">Highest bidder</span>
+                  <strong class="stat-value" id="highestBidder">No bids yet</strong>
+                </article>
+              </div>
+            </section>
+
+            <section class="panel admin-panel hidden" id="adminPanel">
+              <div class="panel-heading">
+                <div>
+                  <p class="panel-label">Administrator Controls</p>
+                  <h2>Prepare players and run the auction</h2>
+                </div>
+                <p class="panel-note">
+                  Only the administrator can load players, control the timer, and view every
+                  team's budget and spending.
+                </p>
+              </div>
+
+              <div class="admin-grid">
+                <article class="admin-card">
+                  <h3>Player List</h3>
+                  <p class="panel-note">
+                    Enter one player per line. Up to 75 players can be loaded before the auction
+                    starts.
+                  </p>
+
+                  <textarea
+                    id="playerTextarea"
+                    class="player-textarea"
+                    rows="14"
+                    placeholder="Player 1&#10;Player 2&#10;Player 3"
+                  ></textarea>
+
+                  <p class="panel-note" id="playerCountNote">0 / 75 players loaded</p>
+
+                  <div class="admin-actions">
+                    <button type="button" class="primary-button" id="savePlayersButton">
+                      Save Player List
+                    </button>
+                    <button type="button" class="secondary-button" id="startAuctionButton">
+                      Start Next Bid
+                    </button>
+                    <button type="button" class="secondary-button" id="pauseAuctionButton">
+                      Pause Session
+                    </button>
+                    <button type="button" class="secondary-button" id="resumeAuctionButton">
+                      Resume Session
+                    </button>
+                    <button type="button" class="secondary-button" id="endAuctionButton">
+                      End Current Bid
+                    </button>
+                    <button type="button" class="secondary-button" id="restartCurrentButton">
+                      Restart Current Player
+                    </button>
+                    <button type="button" class="secondary-button" id="restartWholeButton">
+                      Restart Whole Auction
+                    </button>
+                  </div>
+                </article>
+
+                <article class="admin-card">
+                  <h3>Unsold Player Rebid</h3>
+                  <p class="panel-note">
+                    If someone goes unsold, queue that player again here and reopen bidding later.
+                  </p>
+                  <div id="unsoldList" class="unsold-list"></div>
+                </article>
+              </div>
+            </section>
+
+            <section class="panel bid-panel hidden" id="bidPanel">
+              <div class="panel-heading">
+                <div>
+                  <p class="panel-label">Captain Controls</p>
+                  <h2>Captains place bids from this panel</h2>
+                </div>
+                <p class="panel-note" id="bidContext">
+                  Captains can bid once the administrator starts a player.
+                </p>
+              </div>
+
+              <form id="bidForm" class="bid-form">
+                <label>
+                  Bid amount in lakhs
+                  <input id="bidAmount" name="bidAmount" type="number" min="0" step="1" />
+                </label>
+
+                <div class="quick-bids" id="quickBidRow">
+                  <button type="button" class="secondary-button quick-bid" data-offset="0">0</button>
+                  <button type="button" class="secondary-button quick-bid" data-offset="1">0</button>
+                  <button type="button" class="secondary-button quick-bid" data-offset="2">0</button>
+                </div>
+
+                <button type="submit" class="primary-button" id="placeBidButton">Place Bid</button>
+              </form>
+            </section>
+
+            <section class="panel roster-panel">
+              <div class="panel-heading">
+                <div>
+                  <p class="panel-label">Teams</p>
+                  <h2 id="teamPanelHeading">Teams and purchased players</h2>
+                </div>
+              </div>
+              <div id="teamStrip" class="team-strip"></div>
+              <div id="teamGrid" class="team-grid"></div>
+            </section>
+
+            <section class="panel feed-panel">
+              <div class="panel-heading">
+                <div>
+                  <p class="panel-label">Auction Feed</p>
+                  <h2>Sold and unsold history</h2>
+                </div>
+              </div>
+              <div id="recentFeed" class="result-feed"></div>
+            </section>
+
+            <section class="panel queue-panel">
+              <div class="panel-heading">
+                <div>
+                  <p class="panel-label">Queue</p>
+                  <h2>Players waiting for bidding</h2>
+                </div>
+              </div>
+              <div id="upcomingPlayers" class="upcoming-list"></div>
+            </section>
+          </main>
+        </section>
+
+        <section class="section-view hidden" id="historySection">
+          <div class="history-layout">
+            <section class="panel history-panel">
+              <div class="panel-heading">
+                <div>
+                  <p class="panel-label">Fixtures</p>
+                  <h2>Random team matchups after the auction</h2>
+                </div>
+                <p class="panel-note">
+                  Once all players are auctioned, this section shows which teams will play each
+                  other.
+                </p>
+              </div>
+
+              <div id="fixturesList" class="match-history-list"></div>
+            </section>
+
+            <section class="panel history-panel">
+              <div class="panel-heading">
+                <div>
+                  <p class="panel-label">Match History</p>
+                  <h2>Match records and schedule history</h2>
+                </div>
+                <p class="panel-note">
+                  Open this section any time to see past match records and upcoming entries.
+                </p>
+              </div>
+
+              <div id="matchHistoryList" class="match-history-list"></div>
+            </section>
+
+            <section class="panel admin-panel hidden" id="matchAdminPanel">
+              <div class="panel-heading">
+                <div>
+                  <p class="panel-label">Administrator Only</p>
+                  <h2>Add a match record</h2>
+                </div>
+              </div>
+
+              <form id="matchForm" class="match-form">
+                <label>
+                  Match title
+                  <input id="matchTitle" name="matchTitle" type="text" placeholder="Hostel A vs Hostel B" />
+                </label>
+
+                <label>
+                  Match date
+                  <input id="matchDate" name="matchDate" type="date" />
+                </label>
+
+                <label>
+                  Venue
+                  <input id="matchVenue" name="matchVenue" type="text" placeholder="Main Ground" />
+                </label>
+
+                <label>
+                  Result
+                  <input id="matchResult" name="matchResult" type="text" placeholder="Scheduled / Won / Lost / Draw" />
+                </label>
+
+                <label>
+                  Score
+                  <input id="matchScore" name="matchScore" type="text" placeholder="2-1" />
+                </label>
+
+                <label>
+                  Notes
+                  <textarea id="matchNotes" name="matchNotes" rows="5" placeholder="Optional notes"></textarea>
+                </label>
+
+                <button type="submit" class="primary-button">Save Match Record</button>
+              </form>
+            </section>
+          </div>
+        </section>
+      </section>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="/app.js"></script>
+  </body>
+</html>

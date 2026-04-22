@@ -1,0 +1,18 @@
+{
+  "name": "hostel-football-auction",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Hostel football auction with admin controls, captain bidding, and live viewers.",
+  "scripts": {
+    "dev": "node server.js",
+    "start": "node server.js",
+    "test": "node test/sessionStore.test.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "dotenv": "^17.4.2",
+    "express": "^4.21.2",
+    "mysql2": "^3.22.2",
+    "socket.io": "^4.8.1"
+  }
+}
